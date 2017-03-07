@@ -1,0 +1,236 @@
+; (progn
+;     (create-model 'point-collection)
+;     (add-object (the interface forms) 'link-editor 'link-editor-form-class)
+;     (display (the interface forms link-editor))
+;     )
+
+(in-package :aml)
+
+
+
+(define-class point-collection
+  :inherit-from (series-object)
+  :properties (
+              (ref-coord-sys :class coordinate-system-class
+                   origin (list 0.0 0.0 0.0))
+               collection-type 	'coordinates
+               points-list 		'((0.0 0.0 0.0) (1.0 -1.0 0.0) (2.0 1.0 0.0) (3.0 2.0 0.0) (4.0 1.0 0.0) (5.0 0.0 0.0) (6.0 -2.0 0.0) (7.0 0.0 0.0))
+               quantity 		(length ^points-list)
+               class-expression	'box-object
+               series-prefix 	'p
+               init-form '(
+                           id 			^index
+                           reference-coordinate-system ^ref-coord-sys
+                           line-width 	4
+                           color 		'green
+                           height 0.05
+                           width  0.05
+                           depth  0.05
+                           ;orientation (list (translate '(^index 0.0 0.0)))
+                           orientation (list (translate (nth ^index ^points-list)))
+
+                           ;coordinates	(list (nth 0 (nth ^index ^points-list))
+                          ;                   (nth 1 (nth ^index ^points-list)) (nth 2 (nth ^index ^points-list)))
+
+
+                          )
+               )
+  :subobjects (
+               (nurb-curve :class nurb-curve-object
+                 reference-coordinate-system ^ref-coord-sys
+                 points ^^points-list
+                 degree 2)
+               )
+  )
+
+
+
+
+(define-method get-points-list point-collection ()
+  !points-list
+  )
+
+(define-method get-point-instances point-collection ()
+  (series-members (the))
+  )
+(define-method smash-points-method point-collection ()
+  (smash-value !points-list)
+  )
+
+
+
+(define-method change-points-list point-collection (new-points-list)
+  (change-value !points-list new-points-list)
+  )
+
+(define-method change-points-list-coordinate point-collection (new-coordinate-list index)
+  (replace (nth index !points-list) new-coordinate-list)
+  )
+
+
+
+
+
+(define-class link-editor-form-class
+  :inherit-from(ui-form-class)
+  :properties(
+              label "Link editor"
+              height (* 0.5 (nth 1 (get-screen-size)))
+              width  (* 0.5 (nth 0 (get-screen-size)))
+              y-offset (- ^height (* 0.5 ^height))
+              x-offset (- ^width (* 0.5 ^width))
+
+              loaded-coords-list (get-points-list (the point-collection))
+              coords-quantity (length ^loaded-coords-list)
+              )
+  :subobjects(
+              (canvas :class 'ui-canvas-class
+                  measurement 'percentage
+                  x-offset 30 y-offset 5 width 70 height 90
+                  )
+              (graphic-toolbar :class 'ui-graphic-control-toolbar-class
+                  canvas-object ^canvas
+                  measurement 'percentage
+                  height 5
+                  width 70
+                  x-offset 30
+                  y-offset 95
+                  )
+
+              (draw-curve-action-button :class ui-action-button-class
+                  measurement 'percentage
+                  height 5
+                  width 10
+                  y-offset 10
+                  x-offset 2
+                  label "Draw Curve"
+                  Button1-action '(progn  (draw (the point-collection))
+                                          (update (the superior link-editor))
+                                          (update (the superior canvas))
+                                          (regen)
+                                          (zoom :all)
+                                          )
+                  )
+              (move-point-action-button :class ui-action-button-class
+                  measurement 'percentage
+                  height 5
+                  width 10
+                  y-offset 15
+                  x-offset 2
+                  label "Drag point"
+
+                  Button1-action '(progn
+                                              (let   (
+                                                          (point-number (mouse-select-point-from-display (get-points-list (the point-collection))))
+                                                          (point-instance (nth point-number (get-point-instances(the point-collection))))
+                                                          (coords-list (get-points-list (the point-collection)))
+                                                            )
+                                                          (progn
+                                                            (interactive-translate point-instance)
+                                                            (replace (nth point-number coords-list) (nth 0 (the position (:from point-instance))))
+                                                            (smash-points-method (the point-collection))
+                                                            (change-points-list (the point-collection) coords-list)
+                                                          )
+                                                      )
+                                              (update (the superior sheet))
+                                              (draw (the point-collection))
+                                              (regen)
+                                              (zoom :all)
+                                          )
+                  )
+              (sheet :class '(ui-spreadsheet-class)
+                  measurement 'percentage
+                  x-offset 2
+                  y-offset 25
+                  width 25
+                  height 50
+
+
+
+
+                  column-labels (list "x-coord" "y-coord" "z-coord")
+                  row-labels (loop for row from 0 to ^^coords-quantity
+                               collect (format nil "Node ~a" row)
+                               )
+                  cell-values ^^loaded-coords-list
+                  number-of-columns (length ^column-labels)
+                  number-of-rows ^^coords-quantity
+                  row-height   25
+                  column-width 60
+                  attachment-info-list '(top bottom left right)
+                  editable? t
+
+                  )
+              (toolbar :class ui-toolbar-class
+                  measurement 'percentage
+                  height 10
+                  width 20
+                  y-offset 80
+                  x-offset 7
+                  Availability-list nil
+                  Button1-action-list '(
+                                        (progn
+                                          (change-value
+                                           ^^loaded-coords-list
+                                           (loop for row from 0 to (- ^^coords-quantity 1)
+                                             collect (loop for cell from 0 to 2
+                                                       collect (read-from-string (get-cell-value (the superior sheet) row cell))
+                                                       )
+                                             )
+                                           )
+                                          (change-points-list (the point-collection) ^^loaded-coords-list)
+                                          (update (the superior sheet))
+                                          (regen)
+                                          (draw (the point-collection))
+                                          )
+                                        (progn (change-value
+                                                ^^loaded-coords-list
+                                                (loop for row from 0 to (- ^^coords-quantity 1)
+                                                  collect (loop for cell from 0 to 2
+                                                            collect (read-from-string (get-cell-value (the superior sheet) row cell))
+                                                            )
+                                                  )
+                                                )
+                                               (change-points-list (the point-collection) ^^loaded-coords-list)
+                                               (change-value ^^coords-quantity (+ ^^coords-quantity 1))
+                                               (update (the superior sheet))
+                                               (draw (the point-collection))
+                                               )
+                                        (progn
+                                          (change-value
+                                           ^^loaded-coords-list
+                                           (loop for row from 0 to (- ^^coords-quantity 1)
+                                             collect (loop for cell from 0 to 2
+                                                       collect (read-from-string (get-cell-value (the superior sheet) row cell))
+                                                       )
+                                             )
+                                           )
+                                          (change-points-list (the point-collection) ^^loaded-coords-list)
+                                          (change-value ^^coords-quantity (- ^^coords-quantity 1))
+                                          (update (the superior sheet))
+                                          (draw (the point-collection))
+                                          )
+                                        )
+                  Button3-action-list nil
+                  Images-list (list (concatenate (logical-path :ui-bitmaps) "apply.bmp") (concatenate (logical-path :ui-bitmaps) "add-object.bmp") (concatenate (logical-path :ui-bitmaps) "delete-object.bmp"))
+                  Labels-list (list "Apply" "Add node" "Remove node")
+                  Number-of-buttons (length ^Button1-action-list)
+                  Orient (nth 0 '(:horizontal :vertical))
+                  Tooltips-list nil
+                  )
+              )
+  )
+
+  ; (define-method interactive-translate-method link-editor-form-class ()
+  ;   (let   (
+  ;           (point-number (mouse-select-point-from-display (get-points-list (the point-collection))))
+  ;           (point-instance (nth point-number (get-point-instances(the point-collection))))
+  ;           (coords-list (get-points-list (the point-collection)))
+  ;             )
+  ;           (progn
+  ;             (interactive-translate point-instance)
+  ;             (replace (nth point-number coords-list) (nth 0 (the position (:from point-instance))))
+  ;             (change-points-list (the point-collection) coords-list)
+  ;           )
+  ;       )
+  ; )
