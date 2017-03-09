@@ -4,6 +4,8 @@
 ;     (create-model 'helping-points)
 ;     (add-object (the interface forms) 'link-editor 'link-editor-form-class)
 ;     (display (the interface forms link-editor))
+;     (activate-display (the interface forms link-editor canvas))
+;     (set-current-display-background-color 'grey49)
 ;     )
 
 (in-package :aml)
@@ -96,6 +98,10 @@
   (change-value !model-weight new-weight-points)
   (change-weight-points (the point-collection) !model-weight)
 )
+(define-method change-controller-points nurbs-controller (new-points)
+  (change-value !model-points new-points)
+  (change-points-list (the point-collection) !model-points)
+)
 
 (define-method change-controller-weight-coords nurbs-controller (point-number position)
    (progn (change-value !model-weight (let
@@ -135,9 +141,9 @@
                         reference-coordinate-system ^^ref-coord-sys
                         line-width 	4
                         color 		'green
-                        height 0.05
-                        width  0.05
-                        depth  0.05
+                        height 0.03
+                        width  0.03
+                        depth  0.001
                         ;orientation (list (translate '(^index 0.0 0.0)))
                         orientation (list (translate (nth ^index ^points-list)))
 
@@ -156,9 +162,9 @@
                            reference-coordinate-system ^^ref-coord-sys
                            line-width 	4
                            color 		'red
-                           height 0.05
-                           width  0.05
-                           depth  0.05
+                           height 0.03
+                           width  0.03
+                           depth  0.001
                            ;orientation (list (translate '(^index 0.0 0.0)))
                            orientation (list (translate (nth ^index ^^weight-points)))
 
@@ -196,16 +202,21 @@
 (define-class link-editor-form-class
   :inherit-from(ui-form-class)
   :properties(
-              label "Link editor"
+              ;background-color 'snow2
+              label "NURBS Module"
               height (* 0.6 (nth 1 (get-screen-size)))
               width  (* 0.6 (nth 0 (get-screen-size)))
               y-offset (- ^height (* 0.5 ^height))
               x-offset (- ^width (* 0.5 ^width))
 
+              button-y-offset 95
+
               weight-points (get-controller-weight (the nurbs-controller))
               weight-points-quantity (length ^weight-points)
+              points-list (get-controller-points (the nurbs-controller))
               )
   :subobjects(
+
               (canvas :class 'ui-canvas-class
                   measurement 'percentage
                   x-offset 30 y-offset 5 width 70 height 90
@@ -219,11 +230,11 @@
                   y-offset 95
                   )
 
-              (draw-curve-action-button :class ui-action-button-class
+              (draw-curve-action-button :class 'ui-action-button-class
                   measurement 'percentage
                   height 5
                   width 10
-                  y-offset 10
+                  y-offset 7
                   x-offset 2
                   label "Draw Curve"
                   Button1-action '(progn  (draw (the helping-points))
@@ -234,26 +245,43 @@
                                           (zoom :all)
                                           )
                   )
-              (move-point-action-button :class ui-action-button-class
+              (move-point-action-button :class 'ui-action-button-class
                   measurement 'percentage
                   height 5
                   width 10
-                  y-offset 15
-                  x-offset 2
+                  y-offset 7
+                  x-offset 12
                   label "Drag point"
 
                   Button1-action '(progn (translate-helping-points (the helping-points))
-                                         (update (the superior sheet))
+                                         (update (the superior weight-sheet))
                                          (regen)
                                          (draw (the helping-points)))
                   )
-
-              (sheet :class '(ui-spreadsheet-class)
+              (point-sheet :class 'ui-spreadsheet-class
                   measurement 'percentage
                   x-offset 2
-                  y-offset 25
-                  width 25
-                  height 50
+                  y-offset 40
+                  width 21
+                  height 12
+                  column-labels (list "x-coord" "y-coord" "z-coord")
+                  row-labels (list "Start point" "End point")
+                  cell-values ^^points-list
+                  number-of-columns (length ^column-labels)
+                  number-of-rows 2
+                  row-height   25
+                  column-width 53
+                  attachment-info-list '(top bottom left right)
+                  editable? t
+
+                  )
+
+              (weight-sheet :class 'ui-spreadsheet-class
+                  measurement 'percentage
+                  x-offset 2
+                  y-offset 60
+                  width 22
+                  height 30
                   column-labels (list "x-coord" "y-coord" "z-coord" "weight")
                   row-labels (loop for row from 0 to ^^weight-points-quantity
                                collect (format nil "Point ~a" row)
@@ -262,21 +290,21 @@
                   number-of-columns (length ^column-labels)
                   number-of-rows ^^weight-points-quantity
                   row-height   25
-                  column-width 60
+                  column-width 50
                   attachment-info-list '(top bottom left right)
                   editable? t
 
                   )
-              (toolbar :class ui-toolbar-class
+              (toolbar :class 'ui-toolbar-class
                   measurement 'percentage
-                  height 10
+                  height 5
                   width 20
-                  y-offset 80
+                  y-offset 95
                   x-offset 7
                   Availability-list nil
-                  Button1-action-list '((sheet-apply (the superior link-editor-form-class))
-                                        (sheet-add-row (the superior link-editor-form-class))
-                                        (sheet-remove-row (the superior link-editor-form-class))
+                  Button1-action-list '((weight-sheet-apply (the superior link-editor-form-class))
+                                        (weight-sheet-add-row (the superior link-editor-form-class))
+                                        (weight-sheet-remove-row (the superior link-editor-form-class))
                                         )
                   Button3-action-list nil
                   Images-list (list (concatenate (logical-path :ui-bitmaps) "apply.bmp") (concatenate (logical-path :ui-bitmaps) "add-object.bmp") (concatenate (logical-path :ui-bitmaps) "delete-object.bmp"))
@@ -290,46 +318,53 @@
 
 
 
-(define-method sheet-apply link-editor-form-class ()
+(define-method weight-sheet-apply link-editor-form-class ()
   (progn
-    (change-controller-weight (the nurbs-controller) (loop for row from 0 to (- (the sheet number-of-rows) 1)
+    (change-controller-weight (the nurbs-controller) (loop for row from 0 to (- (the weight-sheet number-of-rows) 1)
                                                       collect (loop for cell from 0 to 3
-                                                                collect (read-from-string (get-cell-value (the sheet) row cell))
+                                                                collect (read-from-string (get-cell-value (the weight-sheet) row cell))
                                                                 )
                                                           )
       )
-    (update (the sheet))
+    (change-controller-points (the nurbs-controller) (loop for row from 0 to (- (the point-sheet number-of-rows) 1)
+                                                          collect (loop for cell from 0 to 2
+                                                                    collect (read-from-string (get-cell-value (the point-sheet) row cell))
+                                                                    )
+                                                              )
+        )
+
+    (update (the weight-sheet))
     (regen)
     (draw (the helping-points))
     )
   )
 
-(define-method sheet-add-row link-editor-form-class ()
+(define-method weight-sheet-add-row link-editor-form-class ()
   (progn
     (change-controller-weight (the nurbs-controller) (append
-                                                              (loop for row from 0 to (- (the sheet number-of-rows) 1)
+                                                              (loop for row from 0 to (- (the weight-sheet number-of-rows) 1)
                                                                    collect (loop for cell from 0 to 3
-                                                                             collect (read-from-string (get-cell-value (the sheet) row cell))
+                                                                             collect (read-from-string (get-cell-value (the weight-sheet) row cell))
                                                                              )
                                                                       )
                                                                (list '(0.0 0.0 0.0 1.0))
                                                             )
       )
-     (update (the sheet))
+     (update (the weight-sheet))
      (regen)
      (draw (the helping-points))
     )
   )
 
-(define-method sheet-remove-row link-editor-form-class ()
+(define-method weight-sheet-remove-row link-editor-form-class ()
   (progn
-    (change-controller-weight (the nurbs-controller) (butlast (loop for row from 0 to (- (the sheet number-of-rows) 1)
+    (change-controller-weight (the nurbs-controller) (butlast (loop for row from 0 to (- (the weight-sheet number-of-rows) 1)
                                                        collect (loop for cell from 0 to 3
-                                                                 collect (read-from-string (get-cell-value (the sheet) row cell))
+                                                                 collect (read-from-string (get-cell-value (the weight-sheet) row cell))
                                                                  )
                                                           ))
         )
-     (update (the sheet))
+     (update (the weight-sheet))
      (regen)
      (draw (the helping-points))
     )
