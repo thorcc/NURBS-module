@@ -1,12 +1,5 @@
-; (progn
-;     (create-model 'point-collection)
-;     (create-model 'nurbs-controller)
-;     (create-model 'helping-points)
-;     (add-object (the interface forms) 'link-editor 'link-editor-form-class)
-;     (display (the interface forms link-editor))
-;     (activate-display (the interface forms link-editor canvas))
-;     (set-current-display-background-color 'grey49)
-;     )
+;To display the nurbs module run the following function:
+;(display-nurbs-module)
 
 (in-package :aml)
 
@@ -369,3 +362,15 @@
      (draw (the helping-points))
     )
   )
+
+(defun display-nurbs-module ()
+  (progn
+      (create-model 'point-collection)
+      (create-model 'nurbs-controller)
+      (create-model 'helping-points)
+      (add-object (the interface forms) 'link-editor 'link-editor-form-class)
+      (display (the interface forms link-editor))
+      (activate-display (the interface forms link-editor canvas))
+      (set-current-display-background-color 'grey49)
+      )
+   )
